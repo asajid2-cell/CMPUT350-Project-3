@@ -218,6 +218,11 @@ int main(int argc, char* argv[]) {
         sounds.RegisterSound(gResourcePath + "/sfx_jump-high.ogg", ECSEngine::SoundName::kDash);
     }
 
+    // Shaders. Nothing uses one yet -- the sprite system still draws sprite by sprite -- so this only
+    // proves the manager loads a file and hands it back.
+    engine.GetShaderManager().RegisterShader(gResourcePath + "/tint.frag", "tint");
+    assert(engine.GetShaderManager().GetShader("tint") != nullptr);
+
     // Create the gameplay scene. Everything the game draws and updates lives in this scene's own
     // entity manager; the engine only owns the window and the shared resources.
     std::shared_ptr<ECSEngine::SceneView<COMPONENTS>> gameplay = engine.MakeScene();

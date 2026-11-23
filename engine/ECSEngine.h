@@ -11,6 +11,7 @@
 #include "MathUtil.h"
 #include "Scene.h"
 #include "ScoreComponent.h"
+#include "ShaderManager.h"
 #include "SoundManager.h"
 #include "SpawnComponent.h"
 #include "SpriteComponent.h"
@@ -31,6 +32,7 @@ class EngineView {
 public:
     virtual SoundManager& GetSoundManager() = 0;
     virtual SpriteManager& GetSpriteManager() = 0;
+    virtual ShaderManager& GetShaderManager() = 0;
     virtual WindowManager& GetWindowManager() = 0;
 
     // The scene currently being run (the top of the stack).
@@ -62,6 +64,8 @@ public:
 
     SpriteManager& GetSpriteManager() override { return mSpriteManager; }
 
+    ShaderManager& GetShaderManager() override { return mShaderManager; }
+
     WindowManager& GetWindowManager() override { return mWindowManager; }
 
     std::shared_ptr<SceneView<Components...>> GetScene() override { return mScenes.back(); }
@@ -83,6 +87,7 @@ private:
 
     SpriteManager mSpriteManager;
     SoundManager mSoundManager;
+    ShaderManager mShaderManager;
     WindowManager mWindowManager;
 
     std::vector<std::shared_ptr<SceneView<Components...>>> mScenes;     // stack; back() runs
