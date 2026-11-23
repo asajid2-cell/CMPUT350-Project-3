@@ -1,5 +1,7 @@
 #pragma once
 
+#include "SystemManager.h"
+
 namespace ECSEngine {
 
 // Straight integration: position moves by velocity. No collision here -- the collision system runs
@@ -12,7 +14,7 @@ public:
         return name;
     }
 
-    tSystemReturn Run(EngineView<Components...>* engine) override {
+    tSystemReturn Run(EngineView<Components...>* engine, SceneView<Components...>* /*scene*/) override {
         auto& entities = engine->GetEntityManager();
 
         for (const Entity& entity : entities) {

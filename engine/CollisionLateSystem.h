@@ -1,5 +1,7 @@
 #pragma once
 
+#include "SystemManager.h"
+
 #include "CollisionUtil.h"
 #include "EntityManager.h"
 #include "LocationComponent.h"
@@ -17,7 +19,7 @@ public:
         return name;
     }
 
-    tSystemReturn Run(EngineView<Components...>* engine) override {
+    tSystemReturn Run(EngineView<Components...>* engine, SceneView<Components...>* /*scene*/) override {
         auto& entities = engine->GetEntityManager();
 
         for (const Entity& entity : entities) {

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "SystemManager.h"
+
 #include "CollisionComponent.h"
 #include "EntityManager.h"
 #include "InputComponent.h"
@@ -37,7 +39,7 @@ public:
 	const std::string & GetName() const override
 	{ static std::string name("GravitySystem"); return name; }
 
-	tSystemReturn Run(EngineView<Components...> *engine) override
+	tSystemReturn Run(EngineView<Components...> *engine, SceneView<Components...>* /*scene*/) override
 	{
 		auto& entities = engine->GetEntityManager();
 

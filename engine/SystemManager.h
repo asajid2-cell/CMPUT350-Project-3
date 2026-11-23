@@ -14,13 +14,18 @@ enum tSystemReturn { kContinue, kExit };
 template <typename... Components>
 class EngineView;
 
-// One step of the game loop. A system reads and writes components through the EngineView it is
-// given and returns kContinue, or kExit to end the game.
+template <typename... Components>
+class SceneView;
+
+// One step of the game loop. A system reads and writes components through the two views it is
+// given and returns kContinue, or kExit to end the frame. Resources that belong to the scene (its
+// entity manager) come from the SceneView; everything else comes from the EngineView. This is what
+// lets the same system run inside more than one scene.
 template <typename... Components>
 class System {
 public:
     virtual ~System() = default;
-    virtual tSystemReturn Run(EngineView<Components...>* scene) = 0;
+    virtual tSystemReturn Run(EngineView<Components...>* engine, SceneView<Components...>* scene) = 0;
 
     // Name used in diagnostics when a system asks the manager to exit.
     virtual const std::string& GetName() const = 0;
@@ -31,10 +36,11 @@ public:
 template <typename... Components>
 class SystemManager {
 public:
-    // Runs every system; returns false as soon as one returns kExit.
-    bool Run(EngineView<Components...>* scene) {
+    // Runs every system; returns false as soon as one returns kExit. The scene is not built yet, so
+    // the scene argument is null for now; it becomes the owning scene once the scene stack lands.
+    bool Run(EngineView<Components...>* engine) {
         for (auto& system : mSystems) {
-            if (system->Run(scene) == kExit) {
+            if (system->Run(engine, nullptr) == kExit) {
                 std::cout << system->GetName() << " requested exit from system manager\n";
                 return false;
             }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "SystemManager.h"
+
 #include <cmath>
 #include <random>
 #include <vector>
@@ -36,7 +38,7 @@ public:
         return name;
     }
 
-    tSystemReturn Run(EngineView<Components...>* engine) override {
+    tSystemReturn Run(EngineView<Components...>* engine, SceneView<Components...>* /*scene*/) override {
         auto& entities = engine->GetEntityManager();
 
         struct PendingSpawn {
