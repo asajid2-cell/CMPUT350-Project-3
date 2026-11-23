@@ -36,11 +36,11 @@ public:
 template <typename... Components>
 class SystemManager {
 public:
-    // Runs every system; returns false as soon as one returns kExit. The scene is not built yet, so
-    // the scene argument is null for now; it becomes the owning scene once the scene stack lands.
-    bool Run(EngineView<Components...>* engine) {
+    // Runs every system; returns false as soon as one returns kExit. Both views are passed straight
+    // through, so a system gets engine resources and its own scene's entities in one call.
+    bool Run(EngineView<Components...>* engine, SceneView<Components...>* scene) {
         for (auto& system : mSystems) {
-            if (system->Run(engine, nullptr) == kExit) {
+            if (system->Run(engine, scene) == kExit) {
                 std::cout << system->GetName() << " requested exit from system manager\n";
                 return false;
             }

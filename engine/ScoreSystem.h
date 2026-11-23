@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Scene.h"
 #include "SystemManager.h"
 
 #include "EntityManager.h"
@@ -25,8 +26,8 @@ public:
         return name;
     }
 
-    tSystemReturn Run(EngineView<Components...>* engine, SceneView<Components...>* /*scene*/) override {
-        auto& entities = engine->GetEntityManager();
+    tSystemReturn Run(EngineView<Components...>* /*engine*/, SceneView<Components...>* scene) override {
+        auto& entities = scene->GetEntityManager();
 
         for (const Entity& entity : entities) {
             const EntityID id = entity.GetID();

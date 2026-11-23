@@ -57,7 +57,8 @@ using Engine = ECSEngine::ECSEngine<COMPONENTS>;
 // Loads one .map file into the engine. A dictionary of 1 is sprites only (the sky layer); 2 adds a
 // collision box per sprite (the world). Every grid cell becomes an entity at its world position,
 // and the spawner symbol S gets a SpawnComponent instead of a collider.
-void LoadMap(Engine& engine, const std::string& path, const std::string& file) {
+void LoadMap(ECSEngine::SpriteManager& spriteManager, ECSEngine::EntityManager<COMPONENTS>& entityManager,
+             const std::string& path, const std::string& file) {
     std::fstream fs;
     fs.open(std::filesystem::path{path} / std::filesystem::path{file}, std::fstream::in);
     assert(!fs.fail());
@@ -98,9 +99,8 @@ void LoadMap(Engine& engine, const std::string& path, const std::string& file) {
 
         ECSEngine::Rect textRect{{pts[0],pts[1]},pts[2],pts[3]};
 
-        ECSEngine::SpriteManager& spr = engine.GetSpriteManager();
         SpriteData data{
-            spr.RegisterTexture(file_path, textRect),
+            spriteManager.RegisterTexture(file_path, textRect),
             hasBounds ? SpriteData::BoundsInfo{ECSEngine::Point2D{pts[4], pts[5]}, pts[6] ,pts[7]} : std::optional<SpriteData::BoundsInfo>{} };
 
 
@@ -131,8 +131,6 @@ void LoadMap(Engine& engine, const std::string& path, const std::string& file) {
     ECSEngine::Point2D worldSize{pts[4], pts[5]};
 
     
-    auto& entityManager = engine.GetEntityManager();
-
     for (size_t row = 0; row < static_cast<size_t>(pts[5]); ++row) {
         std::getline(fs, line);
         assert(line.size() == static_cast<size_t>(pts[4]));
@@ -220,13 +218,21 @@ int main(int argc, char* argv[]) {
         sounds.RegisterSound(gResourcePath + "/sfx_jump-high.ogg", ECSEngine::SoundName::kDash);
     }
 
-    // Load maps
-    LoadMap(engine, gResourcePath, "sky.map");
-    LoadMap(engine, gResourcePath, "world.map");
+    // Create the gameplay scene. Everything the game draws and updates lives in this scene's own
+    // entity manager; the engine only owns the window and the shared resources.
+    std::shared_ptr<ECSEngine::SceneView<COMPONENTS>> gameplay = engine.MakeScene();
+    ECSEngine::EntityManager<COMPONENTS>& entityManager = gameplay->GetEntityManager();
+    ECSEngine::SpriteManager& spriteManager = engine.GetSpriteManager();
 
+    // Load maps
+    LoadMap(spriteManager, entityManager, gResourcePath, "sky.map");
+    LoadMap(spriteManager, entityManager, gResourcePath, "world.map");
+
+    // The scene has its own WindowManager (sharing the engine's window). The camera belongs to the
+    // scene now, so the view centre and scale are set there, not on the engine.
     engine.GetWindowManager().GetWindow()->setFramerateLimit(30);
-    engine.GetWindowManager().SetWorldScale(1);
-    engine.GetWindowManager().SetWorldCenter({kPlayerStartX, kCameraY});
+    gameplay->GetWindowManager().SetWorldScale(1);
+    gameplay->GetWindowManager().SetWorldCenter({kPlayerStartX, kCameraY});
 
     // Place player. The character sheet's first 128x128 cell is the orange alien; the sprite is
     // scaled down to a 64-unit box so it fits the tile grid.
@@ -236,8 +242,7 @@ int main(int argc, char* argv[]) {
     // entities have the components they need.
     ECSEngine::EntityID player = 0;
     {
-        auto& entityManager = engine.GetEntityManager();
-        ECSEngine::SpriteID playerSprite = engine.GetSpriteManager().RegisterTexture(
+        ECSEngine::SpriteID playerSprite = spriteManager.RegisterTexture(
             gResourcePath + "/spritesheet-characters-default.png",
             ECSEngine::Rect{ECSEngine::Point2D{0.0f, 0.0f}, 128.0f, 128.0f});
 
@@ -268,9 +273,6 @@ int main(int argc, char* argv[]) {
     // Setup score component. The HUD digit sprites come from the tiles sheet, which is where the
     // number glyphs live.
     {
-        auto& entityManager = engine.GetEntityManager();
-        auto& spriteManager = engine.GetSpriteManager();
-
         ECSEngine::ScoreComponent scoreComponent{};
         scoreComponent.score = 0;
         for (int d = 0; d < 10; ++d) {
@@ -304,7 +306,6 @@ int main(int argc, char* argv[]) {
 
     // Setup Camera. One camera entity, pinned to the player, with a fixed y from the map.
     {
-        auto& entityManager = engine.GetEntityManager();
         const ECSEngine::EntityID camera = entityManager.CreateEntity("camera");
 
         ECSEngine::CameraComponent cameraComponent{};
@@ -319,8 +320,8 @@ int main(int argc, char* argv[]) {
         entityManager.AddComponent<ECSEngine::CameraFollower>(camera, follower);
     }
 
-    // Add all systems
-    auto& sm = engine.GetSystemManager();
+    // Add all systems to the scene, in the order they run.
+    auto& sm = gameplay->GetSystemManager();
     sm.AddSystem(std::make_unique<ECSEngine::CollisionLateSystem<COMPONENTS>>());
     sm.AddSystem(std::make_unique<ECSEngine::InputSystem<COMPONENTS>>());
     sm.AddSystem(std::make_unique<ECSEngine::GravitySystem<COMPONENTS>>());
@@ -331,6 +332,7 @@ int main(int argc, char* argv[]) {
     sm.AddSystem(std::make_unique<ECSEngine::SpriteSystem<COMPONENTS>>());
     sm.AddSystem(std::make_unique<ECSEngine::SpawnSystem<COMPONENTS>>());
 
+    engine.AddScene(gameplay);
     engine.Run();
     return 0;
 }

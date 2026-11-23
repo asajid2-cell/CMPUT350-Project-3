@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Scene.h"
 #include "SystemManager.h"
 
 #include <cmath>
@@ -38,8 +39,8 @@ public:
         return name;
     }
 
-    tSystemReturn Run(EngineView<Components...>* engine, SceneView<Components...>* /*scene*/) override {
-        auto& entities = engine->GetEntityManager();
+    tSystemReturn Run(EngineView<Components...>* /*engine*/, SceneView<Components...>* scene) override {
+        auto& entities = scene->GetEntityManager();
 
         struct PendingSpawn {
             Point2D at;
@@ -88,7 +89,7 @@ public:
             entities.template AddComponent<CollisionComponent>(star, starCollision);
         }
 
-        CullStars(engine, entities);
+        CullStars(scene, entities);
 
         return kContinue;
     }
@@ -98,9 +99,9 @@ private:
     // past the map edges is never removed, so the entity list and the O(n^2) star-vs-star pass grow
     // for the whole session. "Left the field" is measured from the camera: once a star is more than a
     // full screen away it cannot be seen, so dropping it costs nothing.
-    static void CullStars(EngineView<Components...>* engine,
+    static void CullStars(SceneView<Components...>* scene,
                           EntityManager<Components...>& entities) {
-        const auto& window = engine->GetWindowManager();
+        const auto& window = scene->GetWindowManager();
         const Point2D centre = window.GetWorldCenter();
         const float scale = window.GetWorldScale();
         const Rect view = window.GetWindowBounds();

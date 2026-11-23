@@ -11,6 +11,7 @@
 #include "SfHelper.h"
 #include "SpriteComponent.h"
 #include "SpriteManager.h"
+#include "Scene.h"
 #include "SystemManager.h"
 #include "LocationComponent.h"
 #include "WindowManager.h"
@@ -34,11 +35,11 @@ public:
         return name;
     }
 
-    tSystemReturn Run(EngineView<Components...>* engine, SceneView<Components...>* /*scene*/) override {
+    tSystemReturn Run(EngineView<Components...>* engine, SceneView<Components...>* scene) override {
 
-      auto& entities = engine->GetEntityManager();
+      auto& entities = scene->GetEntityManager();
 
-      const WindowManager& windowManager = engine->GetWindowManager();
+      const WindowManager& windowManager = scene->GetWindowManager();
       auto& spriteManager = engine->GetSpriteManager();
 
       for (const Entity& entity : entities) {
@@ -90,8 +91,6 @@ public:
           windowManager.GetWindow()->draw(outline);
         }
       }
-
-      windowManager.GetWindow()->display();
 
       return kContinue; 
     }

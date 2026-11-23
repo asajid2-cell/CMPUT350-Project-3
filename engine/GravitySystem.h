@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Scene.h"
 #include "SystemManager.h"
 
 #include "CollisionComponent.h"
@@ -39,9 +40,9 @@ public:
 	const std::string & GetName() const override
 	{ static std::string name("GravitySystem"); return name; }
 
-	tSystemReturn Run(EngineView<Components...> *engine, SceneView<Components...>* /*scene*/) override
+	tSystemReturn Run(EngineView<Components...> *engine, SceneView<Components...>* scene) override
 	{
-		auto& entities = engine->GetEntityManager();
+		auto& entities = scene->GetEntityManager();
 
 		for (const Entity& entity : entities) {
 			const EntityID id = entity.GetID();

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Scene.h"
 #include "SystemManager.h"
 
 #include <algorithm>
@@ -50,8 +51,8 @@ public:
         return name;
     }
 
-    tSystemReturn Run(EngineView<Components...>* engine, SceneView<Components...>* /*scene*/) override {
-        auto& entities = engine->GetEntityManager();
+    tSystemReturn Run(EngineView<Components...>* engine, SceneView<Components...>* scene) override {
+        auto& entities = scene->GetEntityManager();
 
         ResolveStatics(engine, entities);
         ResolveDynamicPairs(entities);

@@ -16,6 +16,12 @@ namespace ECSEngine {
 class WindowManager {
 public:
     WindowManager(unsigned int width, unsigned int height, const std::string& title);
+
+    // Copies another manager: same window, same starting camera. A new scene is built from the
+    // engine's manager, so every scene draws into the one window but keeps its own view centre and
+    // scale from that point on.
+    WindowManager(const WindowManager& other);
+
     ~WindowManager() = default;
 
     // The window this manager owns. The shared_ptr may be copied but the manager keeps ownership.
@@ -58,7 +64,7 @@ private:
     std::shared_ptr<sf::RenderWindow> mWindow;
     Vector2D windowSize() const;  // size of the window in screen pixels (window coordinates)
     Vector2D mViewCenterWorld;    // world point drawn at the centre of the window
-    float mWorldUnitsPerPixel;
+    float mWorldUnitsPerPixel = 1.0f;  // 1:1 until the game sets a zoom
 };
 
 }  // namespace ECSEngine

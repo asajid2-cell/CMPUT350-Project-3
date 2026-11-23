@@ -9,6 +9,14 @@ namespace ECSEngine {
 WindowManager::WindowManager(unsigned int width, unsigned int height, const std::string& title)
     : mWindow(std::make_shared<sf::RenderWindow>(sf::VideoMode({width, height}), title)) {}
 
+// Copy: shares the window, and starts with the same camera. The scale is copied too -- a scene built
+// from the engine must not begin with an unset (zero) scale, which would divide by zero in the
+// world/window conversions.
+WindowManager::WindowManager(const WindowManager& other)
+    : mWindow(other.mWindow),
+      mViewCenterWorld(other.mViewCenterWorld),
+      mWorldUnitsPerPixel(other.mWorldUnitsPerPixel) {}
+
 std::shared_ptr<sf::RenderWindow> WindowManager::GetWindow() const { return mWindow; }
 
 Rect WindowManager::GetWindowBounds() const {
