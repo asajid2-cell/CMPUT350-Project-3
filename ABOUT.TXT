@@ -1,0 +1,207 @@
+CMPUT 350 - Project 2
+Platformer
+================
+
+The game
+--------
+A small platformer on a component-based ECS engine. The player runs, jumps, wall jumps and
+dashes through a level built from two map files, collects stars for points, and works through two
+spike corridors. The first corridor is climbed by jumping between its walls; the second is wide
+enough that only the dash gets you across.
+
+The entry point is platformer/main.cpp. It builds the engine, loads the sky and world maps,
+creates the player, the HUD, the camera and the star spawner, adds the systems in order and calls
+engine.Run().
+
+Engine
+------
+ECSEngine<Components...> is both the engine and the EngineView the systems talk to. It owns five
+managers - entity, sound, sprite, window and system - and exposes the first four through
+EngineView, so a system never reaches into the engine itself.
+
+The frame loop in ECSEngine::Run is:
+
+    ProcessEvents()      drain SFML events and write the keys into every InputComponent
+    clear()              clear the window
+    SystemManager::Run() run each system in the order it was added
+                         (SpriteSystem calls display() at the end of its pass)
+
+ProcessEvents only polls SFML and updates the input bitsets. Nothing else reads the window state,
+so the systems behave the same whether they are driven by the window or by a test loop.
+
+Managers
+--------
+EntityManager
+  - Every component type has its own dense array with its own ticketing (ComponentStorage), and
+    each entity keeps one ticket per component type in an std::array<std::vector<size_t>, K>.
+    Reading entity i's component is two lookups with no search; walking one component type walks
+    a single vector, so it has good locality.
+  - The component storages live in an std::tuple, one per registered component type. The
+    template helpers Pack/Contains/Idx deduce the tuple index at compile time, so a component is
+    found without a runtime lookup.
+  - Entities have their own storage, separate from the components. Removing an entity frees its
+    component slots and pushes the ticket onto a free list, so entity ids are reused. The entity
+    vector keeps its size, which means it has gaps: every pass checks IsValid before using an id.
+
+SoundManager
+  - Decoded buffers and one voice per registered name, in two unordered_maps. A name is decoded
+    once, and the map nodes do not move, so each sf::Sound keeps pointing at a buffer that is
+    alive for the manager's whole life.
+
+SpriteManager
+  - Textures are cached by file path in an unordered_map, so the same sheet is loaded once. Each
+    registered sprite is an sf::Sprite cut from a rectangle of that texture, kept in a vector and
+    referred to by index (SpriteID).
+
+WindowManager
+  - Owns the sf::RenderWindow and the world/screen mapping. The view is a world centre plus a
+    world scale in world units per pixel. WorldToWindow and WindowToWorld convert points and
+    rects both ways. The game runs at a scale of 1, so a conversion is just the camera offset.
+  - Screen-space sprites skip the conversion, which is how the HUD stays in the corner.
+
+SystemManager
+  - Owns the systems as unique_ptrs, runs them in insertion order every frame, and stops the
+    loop if one returns kExit.
+
+External APIs
+-------------
+The engine wraps SFML and exposes only what the game needs.
+  - sf::RenderWindow (owned by WindowManager) is the window; sf::Sprite and sf::Texture are the
+    drawing primitives behind SpriteComponent and SpriteManager; sf::Sound and sf::SoundBuffer are
+    the voices behind SoundManager.
+  - The four managers are the spec's: WindowManager converts between world and screen space,
+    EntityManager hands out entities and their components, SoundManager stores and plays the
+    registered sounds, and SpriteManager stores and cuts the registered sprites.
+
+Components (12)
+---------------
+LocationComponent   the entity's top-left in world space; every other stored offset is relative to it
+MovementComponent   velocity, integrated by MovementSystem
+GravityComponent    acceleration plus two frame timers (gravity off during a dash, wall-slide sound cooldown)
+CollisionComponent  the local collision box, last frame's box, the four side flags, and the static/dynamic bit
+InputComponent      this frame's and last frame's key bitsets, plus the wall-jump and dash state
+SpriteComponent     sprite id, the draw rect relative to the location, and world/screen space
+CameraComponent     camera position, world units per pixel, and the exclusion/speed fields
+CameraFollower      the id of the entity the camera tracks
+CameraShake         frames left and the offset added to the camera
+ScoreComponent      the score, the ten digit texture ids and the three digit entity ids
+SpawnComponent      the owner entity, what to spawn, the star texture, and the spawn counters
+RespawnComponent    the spawn location kept on the player
+
+Systems (in the order main.cpp adds them)
+-----------------------------------------
+CollisionLateSystem  copies each collider's world box before anything moves, so the previous
+                     frame's box is available. It runs first.
+InputSystem          turns the key bitset into intent: horizontal acceleration up to a cap, dash,
+                     jump, wall jump, jump-cut. It reads last frame's contact flags because this
+                     frame's are not decided until the collision system runs.
+GravitySystem        applies acceleration, with a different pull while rising, falling, wall
+                     sliding and fast falling. The disabled timer lets a dash skim without falling.
+MovementSystem       location += velocity.
+CollisionSystem      resolves every dynamic collider against every static one, then dynamic
+                     pairs, then collects stars. Details below.
+ScoreSystem          rewrites the three digit sprites from the score every frame.
+CameraSystem         the three-zone follow plus the shake offset.
+SpriteSystem         asserts a LocationComponent, converts each sprite's box to screen space (or
+                     uses it directly in screen space), sets the sf::Sprite's position and size,
+                     draws it, and calls display() at the end.
+SpawnSystem          counts the spawner down, creates stars with a random heading, and culls stars
+                     that are more than a screen from the camera.
+
+Collision
+---------
+Every collider stores its box in its own frame; the world box is that box plus the location. A
+move is resolved after it happens: the mover is tested against each static box and, when they
+overlap, pushed back out. The axis is chosen in this order:
+
+  - a zero overlap on one axis is a flush touch, so resolve on that axis;
+  - otherwise the start-of-frame box (position minus velocity) says which face the mover came in
+    through, and a side face wins. That is what lets a jump pressed into a wall slide up the face
+    instead of being pushed back down by the next tile seam;
+  - a mover that was already inside on both axes falls back to the shallower penetration.
+
+Overlaps counts a shared edge as touching, which is what keeps a resting collider grounded rather
+than sinking and being pushed back out every frame. A block is stopped against the player and
+reflected with damping off a star. Two stars also trade velocity along the axis they were
+separated on, so they bounce instead of merging.
+
+Gameplay and tuning
+-------------------
+The constants are at the top of InputSystem.h and GravitySystem.h.
+
+  - Run: accelerate to 15 units/frame on the ground and 8 in the air, so a jump does not carry as
+    far as the run that launched it.
+  - Jump: -15 up, cut to 35% of the rise if the key is released, so a tap is a hop and a hold is a
+    full jump. The pull is 0.8x gravity while rising, 1.9x while falling, and 2.5x with Down held.
+  - Wall jump: pushes off the touched wall and up. It has to use a different wall than the last
+    one, or follow a landing, which stops a single wall being climbed by mashing.
+  - Wall slide: pushing into a wall while falling uses a 1.0 pull and plays the slide sound with a
+    cooldown.
+  - Dash: 8 frames at 50 units/frame with gravity off, then a 30-frame (one second) cooldown. It
+    is the only way across the wide corridor.
+  - Camera: the middle 40% of the width holds still, 10-30% from the edge eases at 5%, and the
+    outer 10% follows directly. Y never moves.
+  - Stars: spawn every 30 frames at a fixed speed in a random direction, are worth one point,
+    bounce off statics with 72% damping, and are removed once they leave the screen.
+  - Score: three digits in the top-left, in screen space, from the tiles sheet.
+  - Screen shake: a hit kicks the camera opposite the motion, scaled by the speed into the hit,
+    and is edge-gated on last frame's contact flags so leaning on a wall does not shake forever.
+
+Resource lifetimes
+------------------
+What a getter returns, and how long it stays valid.
+
+  - GetSound returns a reference owned by SoundManager. It stays valid until the manager is
+    destroyed, and registering more sounds does not move it. There is one voice per name, so two
+    overlapping plays of the same sound cut each other off.
+  - GetSprite returns a reference into the sprite vector. It is valid until the next
+    RegisterTexture, which can grow the vector. The SpriteID itself stays valid.
+  - GetComponent returns a reference into that component's dense array. Adding or removing an
+    entity or a component can move the array, so re-fetch after any structural change.
+  - GetComponentStorage returns the whole array for a component type. The storage lives as long
+    as the manager, but its elements follow the same rule.
+  - The entity list is stable between structural changes but has gaps: always IsValid, and remove
+    entities after the scan that found them, never during it.
+  - GetWindow returns the shared_ptr that WindowManager holds; the manager owns the window.
+
+Map loading
+-----------
+Both map files use the same parser. The first line names a dictionary (1 = sprites only, 2 =
+sprites with collision boxes). Then one line per symbol gives the file, the source rect and, for
+dictionary 2, the collision box relative to the sprite. The "map origin ... tile ... size ..."
+line gives the origin and tile size, and the grid follows. Each cell becomes an entity with a
+sprite and, when the dictionary has boxes, a static collider. The spawner symbol S gets a
+SpawnComponent instead of a collider. Cells with a symbol not in the dictionary are empty.
+
+The asset folder defaults to "assets"; -path overrides it.
+
+Contributions
+-------------
+Ali Kumail Qazilbash
+  - The entity manager internals (component storage, tickets, packing), the sprite manager, the
+    window manager, the sprite system and the map parser.
+  - The first version of horizontal movement and collision, the star-collision fix, the spawner
+    sprite and the camera tween value.
+
+Ahmed Sajid
+  - Event processing and the input system, the collision system and its utilities, the gravity and
+    movement systems, the score system and the star spawner, the sound manager and sound names, the
+    wall jump and jump tuning, the star bounce, and the player, camera and HUD setup in main.
+
+Use of AI
+---------
+- DeepSeek 4.1 Flash was used as an automated review runner, run locally for static analysis over
+  the engine and the game code, and for a final pass to clean up any uneven or missing
+  documentation. It was used for code review, documentation and cleanup only.
+- Example: the review caught that the land sound was played inside the per-tile collision loop, so
+  a player standing across two floor tiles played it twice. Fix was to play it once per mover,
+  after every tile has been resolved.
+  Prompt: "review this project for bugs and issues, keeping in mind it has only been built on
+  Windows so far, and list each finding with evidence and a proposed fix"
+- Example: the review caught that a star that bounced out past the map edges was never removed, so
+  the entity list and the star-vs-star pass grew for the whole session. Fix was to remove a star
+  once it is more than one screen from the camera.
+- Reflection: The model was helpful at spotting wrong assumptions and edge cases just by reading the
+  code, especially ones we had not caught in testing. It was also convenient for the final
+  documentation pass. We still needed to check the findings ourselves and understand the resulting
+  implementation.
